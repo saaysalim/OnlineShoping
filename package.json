@@ -60,8 +60,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",build
-    "deploy": "npm run build && gh-pages -d dist"
+    "build": "vite build",
+    "deploy": "npm run build && gh-pages -d build"
   }
 }
 
