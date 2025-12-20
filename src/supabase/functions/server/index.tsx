@@ -337,3 +337,83 @@ app.get('/make-server-f3a661bc/images', async (c) => {
     return c.json({ success: false, error: String(error) }, 500)
   }
 })
+
+// Payments: Stripe Checkout integration via REST API
+// Requires env STRIPE_SECRET_KEY. Optionally SITE_URL for default return URLs.
+app.post('/make-server-f3a661bc/payments/checkout', async (c) => {
+  try {
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
+    if (!stripeKey) {
+      return c.json({ success: false, error: 'Card payments are not configured' }, 503)
+    }
+
+    const body = await c.req.json()
+    const items = (body?.items || []) as Array<{ name: string; amount: number; quantity: number; image?: string }>
+    const customerEmail = body?.customerEmail as string | undefined
+    const successUrl = body?.successUrl as string | undefined
+    const cancelUrl = body?.cancelUrl as string | undefined
+
+    const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:3000/'
+
+    const params = new URLSearchParams()
+    params.append('mode', 'payment')
+    params.append('success_url', `${successUrl || siteUrl}?checkout=success&session_id={CHECKOUT_SESSION_ID}`)
+    params.append('cancel_url', `${cancelUrl || siteUrl}?checkout=cancel`)
+    if (customerEmail) params.append('customer_email', customerEmail)
+
+    // Build line items
+    items.forEach((it, idx) => {
+      const i = `line_items[${idx}]`
+      params.append(`${i}[quantity]`, String(Math.max(1, it.quantity || 1)))
+      params.append(`${i}[price_data][currency]`, 'eur')
+      params.append(`${i}[price_data][unit_amount]`, String(Math.round(it.amount)))
+      params.append(`${i}[price_data][product_data][name]`, it.name)
+      if (it.image) params.append(`${i}[price_data][product_data][images][]`, it.image)
+    })
+
+    const resp = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${stripeKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params
+    })
+
+    const data = await resp.json()
+    if (!resp.ok) {
+      console.log('Stripe error', data)
+      return c.json({ success: false, error: data?.error?.message || 'Stripe request failed' }, 500)
+    }
+
+    return c.json({ success: true, url: data.url, session: data })
+  } catch (error) {
+    console.log('Error creating Stripe checkout', error)
+    return c.json({ success: false, error: String(error) }, 500)
+  }
+})
+
+// Verify a checkout session
+app.get('/make-server-f3a661bc/payments/session/:id', async (c) => {
+  try {
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
+    if (!stripeKey) {
+      return c.json({ success: false, error: 'Card payments are not configured' }, 503)
+    }
+
+    const id = c.req.param('id')
+    const resp = await fetch(`https://api.stripe.com/v1/checkout/sessions/${id}`, {
+      headers: {
+        Authorization: `Bearer ${stripeKey}`
+      }
+    })
+    const data = await resp.json()
+    if (!resp.ok) {
+      return c.json({ success: false, error: data?.error?.message || 'Stripe request failed' }, 500)
+    }
+    return c.json({ success: true, session: data })
+  } catch (error) {
+    console.log('Error fetching Stripe session', error)
+    return c.json({ success: false, error: String(error) }, 500)
+  }
+})

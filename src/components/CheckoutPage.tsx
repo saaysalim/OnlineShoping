@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Separator } from './ui/separator'
 import { toast } from 'sonner@2.0.3'
+import { createCheckoutSession, getCheckoutSession } from '../utils/payments'
 
 interface CartItem {
   productId: string
@@ -90,9 +91,19 @@ export function CheckoutPage({ cart, onBack, onPlaceOrder }: CheckoutPageProps) 
       return
     }
 
-    // Card / wallet simulation
-    setTimeout(async () => {
-      const orderData = {
+    // Card / wallet via Stripe Checkout
+    try {
+      const returnBase = `${window.location.origin}${window.location.pathname}`
+      const items = cart.items.map((it) => ({
+        name: it.product.name,
+        // amount in cents
+        amount: Math.round(it.product.price * 100),
+        quantity: it.quantity,
+        image: it.product.imageUrl
+      }))
+
+      // Store pending order locally to finalize after successful payment
+      const pendingOrder = {
         userId: 'guest-user',
         items: cart.items,
         total,
@@ -105,17 +116,25 @@ export function CheckoutPage({ cart, onBack, onPlaceOrder }: CheckoutPageProps) 
           country: 'Ireland'
         }
       }
+      localStorage.setItem('osm_pending_order', JSON.stringify(pendingOrder))
 
-      try {
-        const res = await onPlaceOrder(orderData)
-        setEmailSent(res?.emailSent ?? false)
-      } catch (e) {
-        console.error('Order placement error', e)
+      const res = await createCheckoutSession({
+        items,
+        customerEmail: billingInfo.email || undefined,
+        successUrl: returnBase,
+        cancelUrl: returnBase
+      })
+
+      if (res?.success && res?.url) {
+        window.location.href = res.url
+        return
       }
-
+      throw new Error(res?.error || 'Unable to start payment')
+    } catch (e: any) {
+      console.error('Payment error', e)
+      toast.error(e?.message || 'Payment could not be initiated')
       setIsProcessing(false)
-      setOrderComplete(true)
-    }, 2000)
+    }
   }
 
   useEffect(() => {
@@ -124,6 +143,40 @@ export function CheckoutPage({ cart, onBack, onPlaceOrder }: CheckoutPageProps) 
       if (raw) setBankAccount(JSON.parse(raw))
     } catch {
       setBankAccount({})
+    }
+    // On return from Stripe
+    const params = new URLSearchParams(window.location.search)
+    const checkoutResult = params.get('checkout')
+    const sessionId = params.get('session_id')
+    if (checkoutResult === 'success') {
+      (async () => {
+        try {
+          setIsProcessing(true)
+          // verify session if available
+          if (sessionId) {
+            const verify = await getCheckoutSession(sessionId)
+            if (!verify?.success) {
+              toast.warning('Payment verified but status unavailable')
+            }
+          }
+          const rawPending = localStorage.getItem('osm_pending_order')
+          if (rawPending) {
+            const orderData = JSON.parse(rawPending)
+            const res = await onPlaceOrder(orderData)
+            setEmailSent(res?.emailSent ?? false)
+            localStorage.removeItem('osm_pending_order')
+          }
+          setOrderComplete(true)
+        } catch (e) {
+          console.error('Finalize order error', e)
+          toast.error('Payment succeeded but order finalization failed')
+        } finally {
+          setIsProcessing(false)
+        }
+      })()
+    } else if (checkoutResult === 'cancel') {
+      toast.info('Payment cancelled')
+      localStorage.removeItem('osm_pending_order')
     }
   }, [])
 
