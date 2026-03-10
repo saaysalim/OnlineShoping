@@ -7,6 +7,20 @@ A modern, full-stack e-commerce platform built with React, TypeScript, and Supab
 [![Vite](https://img.shields.io/badge/Vite-6.3.5-purple?logo=vite)](https://vitejs.dev/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+## Model-Driven Design (DDD)
+
+This repository now includes a domain model and subdomain classification for the Online Shop:
+
+- Full model document: [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md)
+
+### Subdomains
+
+- `Core`: Checkout and Order Lifecycle, Payment Orchestration and Reconciliation
+- `Supporting`: Product Catalog Management, Customer Shopping Experience, Review Management, Admin Operations
+- `Generic`: Authentication and Session, Notification/Email Dispatch, File/Media Storage, UI Component Framework
+
+The model includes bounded contexts, aggregates, value objects, domain services, context relationships, and invariants.
+
 ## ✨ Features
 
 ### 🛒 Customer Features
