@@ -9,6 +9,7 @@ import { ShoppingCart as ShoppingCartComponent } from './components/ShoppingCart
 import { ProductDetails } from './components/ProductDetails'
 import { CheckoutPage } from './components/CheckoutPage'
 import { IntroPage } from './components/IntroPage'
+import { HomePage } from './components/HomePage'
 import { AdminPanel } from './components/AdminPanel'
 import { BankSettings } from './components/BankSettings'
 import { LoginModal } from './components/LoginModal'
@@ -38,7 +39,7 @@ export default function App() {
   const [cart, setCart] = useState<{ items: CartItem[] }>({ items: [] })
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showProductDetails, setShowProductDetails] = useState(false)
-  const [currentView, setCurrentView] = useState<'shop' | 'checkout' | 'intro'>('shop')
+  const [currentView, setCurrentView] = useState<'home' | 'shop' | 'checkout' | 'intro'>('home')
   const [currentUser, setCurrentUser] = useState<{ username: string; role: 'admin' | 'user' } | null>(() => {
     try {
       const raw = localStorage.getItem('osm_user')
@@ -333,6 +334,27 @@ export default function App() {
     )
   }
 
+  if (currentView === 'home') {
+    return (
+      <>
+        <HomePage
+          onEnterShop={() => setCurrentView('shop')}
+          onOpenAbout={() => setCurrentView('intro')}
+        />
+        <Toaster />
+      </>
+    )
+  }
+
+  if (currentView === 'intro') {
+    return (
+      <>
+        <IntroPage onBack={() => setCurrentView('shop')} />
+        <Toaster />
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -350,6 +372,9 @@ export default function App() {
             <div className="flex items-center gap-4">
               {currentUser?.role === 'admin' && <AdminPanel onAddProduct={handleAddProduct} />}
               {currentUser?.role === 'admin' && <BankSettings />}
+              <Button variant="ghost" size="sm" onClick={() => setCurrentView('home')}>
+                Home
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => setCurrentView('intro')}>
                 About Us
               </Button>
